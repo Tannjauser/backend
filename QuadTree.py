@@ -4,12 +4,6 @@ import json
 import os
 
 class Point:
-    """A point located at (x,y) in 2D space.
-
-    Each Point object may be associated with a payload object.
-
-    """
-
     def __init__(self, x, y, z,classification, intensity, rgb):
         self.x, self.y , self.z= x, y, z
         self.classification = classification
@@ -29,7 +23,6 @@ class Point:
         return np.hypot(self.x - other_x, self.y - other_y)
 
 class Chunck:
-    """A rectangle centred at (cx, cy) with width w and height h."""
 
     def __init__(self, cx, cy, w, h):
         self.cx, self.cy = cx, cy
@@ -42,7 +35,6 @@ class Chunck:
                 self.south_edge))
 
     def contains(self, point):
-        """Is point (a Point object or (x,y) tuple) inside this Chunck?"""
 
         try:
             point_x, point_y = point.x, point.y
@@ -55,31 +47,18 @@ class Chunck:
                 point_y < self.south_edge)
 
     def intersects(self, other):
-        """Does Chunck object other interesect this Chunck?"""
         return not (other.west_edge > self.east_edge or
                     other.east_edge < self.west_edge or
                     other.north_edge > self.south_edge or
                     other.south_edge < self.north_edge)
 
 class QuadTree:
-    """A class implementing a quadtree."""
-
     def __init__(self, boundary, limit, xmin, ymin, zmin, outputDir, max_points=50000, level='0'):
-        """Initialize this node of the quadtree.
-
-        boundary is a Chunck object defining the region from which points are
-        placed into this node; max_points is the maximum number of points the
-        node can hold before it must divide (branch into four more nodes);
-        level keeps track of how deep into the quadtree this node lies.
-
-        """
-
         self.boundary = boundary
         self.max_points = max_points
         self.points = []
         self.level = level
         self.limit = limit
-        # A flag to indicate whether this node has divided (branched) or not.
         self.divided = False
         self.notDone=True
         self.xmin=xmin
@@ -164,13 +143,9 @@ class QuadTree:
 
 
     def divide(self):
-        """Divide (branch) this node by spawning four children nodes."""
 
         cx, cy = self.boundary.cx, self.boundary.cy
         w, h = self.boundary.w / 2, self.boundary.h / 2
-        # The boundaries of the four children nodes are "northwest",
-        # "northeast", "southeast" and "southwest" quadrants within the
-        # boundary of the current node.
         self.nw = QuadTree(Chunck(cx - w/2, cy - h/2, w, h), self.limit,
                                     self.xmin, self.ymin, self.zmin, self.outputDir,
                                     self.max_points, str(self.level) + str(1))
@@ -186,23 +161,18 @@ class QuadTree:
         self.divided = True
 
     def insert(self, point):
-        """Try to insert Point point into this QuadTree."""
 
         if not self.boundary.contains(point):
-            # The point does not lie inside boundary: bail.
             return False
         if self.notDone:
             if len(self.points) < int(self.max_points):
-                # There's room for our point without dividing the QuadTree.
                 self.points.append(point)
                 return True
 
-            # If the limit has been reached, insert either way.
             if len(str(self.level)) >= int(self.limit) and self.limit != -1:
                 self.points.append(point)
                 return True
 
-            # No room: divide if necessary, then try the sub-quads.
             if not self.divided:
                 self.divide()
                 self.notDone=False
@@ -215,18 +185,13 @@ class QuadTree:
 
 
     def query(self, boundary, found_points):
-        """Find the points in the quadtree that lie within boundary."""
 
         if not self.boundary.intersects(boundary):
-            # If the domain of this node does not intersect the search
-            # region, we don't need to look in it for points.
             return False
 
-        # Search this node's points to see if they lie within boundary ...
         for point in self.points:
             if boundary.contains(point):
                 found_points.append(point)
-        # ... and if this node has children, search them too.
         if self.divided:
             self.nw.query(boundary, found_points)
             self.ne.query(boundary, found_points)
@@ -234,45 +199,7 @@ class QuadTree:
             self.sw.query(boundary, found_points)
         return found_points
 
-
-    def query_circle(self, boundary, centre, radius, found_points):
-        """Find the points in the quadtree that lie within radius of centre.
-
-        boundary is a Chunck object (a square) that bounds the search circle.
-        There is no need to call this method directly: use query_radius.
-
-        """
-
-        if not self.boundary.intersects(boundary):
-            # If the domain of this node does not intersect the search
-            # region, we don't need to look in it for points.
-            return False
-
-        # Search this node's points to see if they lie within boundary
-        # and also lie within a circle of given radius around the centre point.
-        for point in self.points:
-            if (boundary.contains(point) and
-                    point.distance_to(centre) <= radius):
-                found_points.append(point)
-
-        # Recurse the search into this node's children.
-        if self.divided:
-            self.nw.query_circle(boundary, centre, radius, found_points)
-            self.ne.query_circle(boundary, centre, radius, found_points)
-            self.se.query_circle(boundary, centre, radius, found_points)
-            self.sw.query_circle(boundary, centre, radius, found_points)
-        return found_points
-
-    def query_radius(self, centre, radius, found_points):
-        """Find the points in the quadtree that lie within radius of centre."""
-
-        # First find the square that bounds the search circle as a Chunck object.
-        boundary = Chunck(*centre, 2*radius, 2*radius)
-        return self.query_circle(boundary, centre, radius, found_points)
-
-
     def __len__(self):
-        """Return the number of points in the quadtree."""
 
         npoints = len(self.points)
         if self.divided:
